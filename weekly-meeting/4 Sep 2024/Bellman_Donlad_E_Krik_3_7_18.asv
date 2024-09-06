@@ -1,0 +1,59 @@
+clear all
+clc
+close all
+
+% Number of time steps
+t=1;
+tf=3;
+K=t;
+N=linspace(0,tf,t);
+
+% State and control space
+x0 = 0.5;     % initial state
+u0= 1;       % control input 
+% Set the terminal cost at the final time step (N)
+
+J(:, N) = 0.25;  % Terminal cost is set to 10 for all states at time N
+
+% Main loop for dynamic programming
+for k = N-1:-1:1
+        % Quadratic cost function (gD(x, u))
+        cost = (x^2 + u^2) + J(ix_next, k+1);
+        
+        x_next = x + u;  % Simple state transition
+
+
+    for ix = 1:length(x_space)
+        x = x_space(ix);
+        J_min = inf;  % Initialize minimum cost-to-go
+        for iu = 1:length(u_space)
+            u = u_space(iu);
+            
+            % State transition (x_next = aD(x, u))
+            
+            % Find the nearest index for the next state
+            [~, ix_next] = min(abs(x_space - x_next));
+            
+            % Quadratic cost function (gD(x, u))
+            cost = (x^2 + u^2) + J(ix_next, k+1);
+            
+            % Update minimum cost-to-go
+            if cost < J_min
+                J_min = cost;
+            end
+        end
+        J(ix, k) = J_min;  % Store the minimum cost-to-go for this state
+    end
+end
+
+% Plot the cost-to-go function for different time steps
+figure;
+for k = 1:N-K
+    plot(J(:, k),x_space);
+    hold on;
+end
+xlabel('State x');
+ylabel('Cost-to-Go J(x, t)');
+legend(arrayfun(@(k) sprintf('cost to go N-K = %d', k), 1:K:N, 'UniformOutput', false));
+title('Cost-to-Go Function over Time');
+grid on;
