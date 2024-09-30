@@ -1,0 +1,41 @@
+clear 
+clc
+close all
+
+% MATLAB Code to Visualize the Feasible Set as a Dashed Red Line with Blue Point
+
+% Define the set A
+A = [-1, 1];
+
+x = 0.2;
+
+% Generate points within the feasible set A
+y = linspace(A(1), A(2), 100); % 100 points between -1 and 1
+
+% Calculate the norm ||y - x|| (in 1D, this is the absolute value |y - x|)
+norm_yx = abs( x);
+
+
+% Create a figure for visualization
+figure;
+hold on;
+
+% Plot the norm ||x-y|| as a function of y
+plot(y, norm_yx, 'b-', 'LineWidth', 2);
+
+% Plot a dashed red line for the interval [-1, 1]
+plot([A(1), A(1)], [-2, 2], 'r--', 'LineWidth', 2); % Left boundary
+plot([A(2), A(2)], [-2, 2], 'r--', 'LineWidth', 2); % Right boundary
+
+% Plot a blue point at x = 0.2 (time zero)
+plot(x, 0, 'bo', 'MarkerSize', 3, 'MarkerFaceColor', 'r'); % Blue point at x = 0.2
+
+% Labels and title
+xlabel('x');
+ylabel('');
+title('Feasible Set A = [-1, 1] with Point at x = 0.2');
+xlim([-2 2]);
+ylim([-2 2]);
+grid on;
+hold off;
+
