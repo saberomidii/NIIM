@@ -1,0 +1,49 @@
+function signed_distance = signed_distance_function(x,y,theta,set_in,set_out,show_plot)
+
+% Offset trajectories (feasible set boundaries)
+desired_trajectory = @(x) 0.75 * x.^2; % Scaled to fit (2,2) target
+offset_positive = @(x) desired_trajectory(x) + 0.2;
+offset_negative = @(x) desired_trajectory(x) - 0.2;
+
+ % Calculate the feasible set boundaries for the current x
+    upper_bound = offset_positive(x);
+    lower_bound = offset_negative(x);
+
+    % Check if the point is inside or outside the feasible bounds
+    if y >= lower_bound && y <= upper_bound  %% inside X 
+        for rows=1:length(set_in)
+            norm(rows)=vecnorm([x;y,theta] - set_in(rows,:)');
+        end
+        signed_distance = -min(norm);
+        if show_plot
+            figure(2); clf; % Clear the figure
+            plot(norm, 'o');
+            yline(signed_distance, 'color', 'green', 'LineWidth', 2);
+            ylabel('Signed Distance Function');
+            xlabel('Points');
+            title('In Feasible Set');
+            drawnow; % Update the figure immediately
+        end
+
+    else
+       for rows=1:length(set_in)
+            norm(rows)=vecnorm([x;y;theta] - set_out(rows,:)');
+       end
+        signed_distance = min(norm);
+        if show_plot
+            figure(2); clf; % Clear the figure
+            plot(norm, 'o');
+            yline(signed_distance, 'color', 'green', 'LineWidth', 2);
+            ylabel('Signed Distance Function');
+            xlabel('Points');
+            title('Out of Feasible Set');
+            drawnow; % Update the figure immediately
+        end
+
+end
+
+
+
+
+        
+
