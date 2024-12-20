@@ -1,0 +1,67 @@
+# Perform backward iteration to compute Value Function, Policy, and Disturbance Map
+for k in time_steps:-1:1
+    println("Calculating optimal policy for time step $k")
+    for (xi, x) in enumerate(x_grid)
+        for (yi, y) in enumerate(y_grid)
+            for (ti, theta) in enumerate(theta_grid)
+                state = (x, y, theta)
+                max_value = -Inf  # Initialization for maximization over actions
+                best_action = (NaN, NaN)
+                best_disturbance = NaN  # Initialize best disturbance for the best action
+
+                # Loop over control actions (maximization)
+                for omega in omega_grid
+                    for v in v_grid
+                        action = (omega, v)
+                        
+                        min_future_value = Inf  # Initialization for minimization over disturbances
+                        disturbance_for_current_action = NaN
+
+                        # Loop over disturbances (minimization)
+                        for disturbance in disturbance_values
+                            # Compute the next state with disturbance
+                            for horizon_index in 1:horizon
+                            next_state = dynamics(state, action, disturbance, horizon*delta_t)
+                            x_next, y_next, theta_next = next_state
+                            
+                            # Get indices of the next state
+                            x_next_idx, y_next_idx, theta_next_idx = get_indices(next_state, x_grid, y_grid, theta_grid)
+                            
+                            # Check if indices are within bounds
+                            if 1 ≤ x_next_idx ≤ num_x && 1 ≤ y_next_idx ≤ num_y && 1 ≤ theta_next_idx ≤ num_theta
+                                # Retrieve the Value Function at the next state
+                                V_next = V[k + 1, x_next_idx, y_next_idx, theta_next_idx]
+                            else
+                                V_next = -Inf  # Assign a penalty for out-of-bounds transitions
+                            end
+                            
+                            # Compute signed distance at the next state
+                            sign_distance = g(state)
+                            
+                            # Compute future_value as the minimum between sign_distance and V_next
+                            future_value = min(sign_distance, V_next)
+                            
+                            # Update min_future_value and disturbance_for_current_action if future_value is less
+                            if future_value < min_future_value
+                                min_future_value = future_value
+                                disturbance_for_current_action = disturbance
+                            end
+                        end
+                        
+                        # Update max_value, best_action, and best_disturbance if min_future_value is greater
+                        if min_future_value > max_value
+                            max_value = min_future_value
+                            best_action = action
+                            best_disturbance = disturbance_for_current_action
+                        end
+                    end
+                end
+            end
+                # Update Value Function, Policy, and Disturbance Map
+                V[k, xi, yi, ti] = max_value
+                policy[k, xi, yi, ti] = best_action
+                disturbance_map[k, xi, yi, ti] = best_disturbance  # Store the disturbance
+            end
+        end
+    end
+end

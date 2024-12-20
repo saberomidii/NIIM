@@ -1,0 +1,171 @@
+% Clear workspace, command window, and close all figures
+clear;
+clc;
+close all;
+
+% Define minimum and maximum values as vectors
+min_vals = [-5; -3];
+max_vals = [3; 5];
+
+% Define the feasible set (not used further in this optimized code, but kept for consistency)
+feasible_set = define_rectangular_set(min_vals, max_vals);
+
+% Time step and simulation parameters
+dt = 0.1;
+Last_step = 50;
+v = 1;      % Constant speed
+
+% Create input list from -1 to 1 with a step of 0.1 (same as dt)
+input_list = -1:dt:1;           % 21 elements
+state_1_list = -5:dt:-3;        % 21 elements
+state_2_list = 3:dt:5;          % 21 elements
+
+% Determine the number of elements in each list
+num_inputs = length(input_list);
+num_state_1 = length(state_1_list);
+num_state_2 = length(state_2_list);
+
+% Preallocate a 3D matrix to store l values
+% Dimensions: state_2 x state_1 x input
+l_matrix = zeros(num_state_2, num_state_1, num_inputs);
+
+% Start timing the optimization
+tic;
+
+% Loop through each combination of state_2, state_1, and input
+for s2_idx = 1:num_state_2
+    state_2 = state_2_list(s2_idx);
+    for s1_idx = 1:num_state_1
+        state_1 = state_1_list(s1_idx);
+        for u_idx = 1:num_inputs
+            input = input_list(u_idx);
+            
+            % Initialize state [x; y; theta]
+            state = [state_1; state_2; 0];
+            
+            % Initialize minimum l value for this trajectory
+            min_l = Inf;
+            
+            % Simulate the trajectory for Last_step time steps
+            for step = 1:Last_step
+                % Update state using Dubin's car dynamics
+                state = dubins_car(state, input, v, dt);
+                
+                % Compute signed distance for the current position
+                s = signed_distance(state(1:2), min_vals, max_vals);
+                
+                % Compute l = -s
+                l = -s;
+                
+                % Update the minimum l value
+                if l < min_l
+                    min_l = l;
+                end
+            end
+            
+            % Store the minimum l value in the matrix
+            l_matrix(s2_idx, s1_idx, u_idx) = min_l;
+        end
+    end
+end
+
+% End timing the optimization
+toc;
+
+% Visualization (optional)
+
+% Example: Find the maximum l and corresponding indices
+[max_l, linear_idx] = max(l_matrix(:));
+[s2_opt, s1_opt, u_opt_idx] = ind2sub(size(l_matrix), linear_idx);
+
+% Retrieve the optimal state_2, state_1, and input values
+state_2_opt = state_2_list(s2_opt);
+state_1_opt = state_1_list(s1_opt);
+input_opt = input_list(u_opt_idx);
+
+% Display the optimal results
+fprintf('Optimal Results:\n');
+fprintf('Maximum l: %.4f\n', max_l);
+fprintf('Optimal state_1: %.2f\n', state_1_opt);
+fprintf('Optimal state_2: %.2f\n', state_2_opt);
+fprintf('Optimal input: %.2f\n', input_opt);
+
+% Function Definitions
+
+function next_state = dubins_car(state, input, v, dt)
+    % Dubin's car dynamics
+    % state: [x; y; theta]
+    % input: steering rate (omega)
+    % v: constant speed
+    % dt: time step
+    % next_state: updated state after time step dt
+
+    x_next = state(1) + v * cos(state(3)) * dt;
+    y_next = state(2) + v * sin(state(3)) * dt;
+    theta_next = state(3) + input * dt;
+
+    next_state = [x_next; y_next; theta_next];
+end
+
+function rect_set = define_rectangular_set(min_vals, max_vals)
+    % Define a rectangular feasible set
+    % min_vals: [x_min; y_min]
+    % max_vals: [x_max; y_max]
+    % rect_set: structure containing min and max values
+
+    rect_set.min = min_vals;
+    rect_set.max = max_vals;
+end
+
+function s = signed_distance(position, min_vals, max_vals)
+    % Compute the signed distance for a single position
+    % position: [x; y]
+    % min_vals: [x_min; y_min]
+    % max_vals: [x_max; y_max]
+    % s: signed distance (scalar)
+
+    x = position(1);
+    y = position(2);
+
+    if (x >= min_vals(1)) && (x <= max_vals(1)) && ...
+       (y >= min_vals(2)) && (y <= max_vals(2))
+        % Inside the set
+        distance_to_min_x = x - min_vals(1);
+        distance_to_max_x = max_vals(1) - x;
+        distance_to_min_y = y - min_vals(2);
+        distance_to_max_y = max_vals(2) - y;
+
+        min_distance_to_boundary = min([distance_to_min_x, distance_to_max_x, ...
+                                       distance_to_min_y, distance_to_max_y]);
+
+        % Signed distance is negative of the minimum distance to boundary
+        s = -min_distance_to_boundary;
+    else
+        % Outside the set
+        dx = 0;
+        dy = 0;
+
+        if x < min_vals(1)
+            dx = min_vals(1) - x;
+        elseif x > max_vals(1)
+            dx = x - max_vals(1);
+        end
+
+        if y < min_vals(2)
+            dy = min_vals(2) - y;
+        elseif y > max_vals(2)
+            dy = y - max_vals(2);
+        end
+
+        % Euclidean distance to the set
+        s = sqrt(dx^2 + dy^2);
+    end
+end
+
+function l = l_function(s)
+    % Compute the l function as the minimum of -s
+    % s: vector of signed distances
+    % l: scalar minimum value of -s
+
+    l = min(-s);
+end

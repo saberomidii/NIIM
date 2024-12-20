@@ -1,0 +1,323 @@
+import math
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # Import for 3D plotting
+import numpy as np  # Import numpy for meshgrid and array manipulations
+
+# Define the cost function or signed distance function
+def g(s):
+    """
+    Computes the signed distance from the state (x, y) to the boundary.
+    Negative inside the boundary, positive outside.
+
+    Parameters:
+    s (list or tuple): State vector [x, y, theta]
+
+    Returns:
+    float: Signed distance
+    """
+    x, y = s[:2]  # Only consider the x and y components
+    min_x, max_x = -1, 1
+    min_y, max_y = -1, 1
+    if min_x <= x <= max_x and min_y <= y <= max_y:
+        # Inside the boundary: negative distance
+        return -min(x - min_x, max_x - x, y - min_y, max_y - y)
+    else:
+        # Outside the boundary: Euclidean distance to the boundary
+        dx = max(min_x - x, 0, x - max_x)
+        dy = max(min_y - y, 0, y - max_y)
+        return math.sqrt(dx**2 + dy**2)
+
+# Dubin's car dynamics function
+def f(s, u, delta_t):
+    """
+    Updates the state based on Dubin's car dynamics.
+
+    Parameters:
+    s (list or tuple): Current state [x, y, theta]
+    u (float): Control input (steering angle)
+    delta_t (float): Time step
+
+    Returns:
+    list: Next state [x_next, y_next, theta_next]
+    """
+    x, y, theta = s
+    v = 0.5  # Constant speed
+    x_next = x + v * math.cos(theta) * delta_t
+    y_next = y + v * math.sin(theta) * delta_t
+    theta_next = (theta + u * delta_t) % (2 * math.pi)  # Keep theta within [0, 2π)
+    return [x_next, y_next, theta_next]
+
+# Discretize actions
+def discretize_actions(start, stop, step):
+    """
+    Creates a list of discrete actions within the specified range.
+
+    Parameters:
+    start (float): Start of the range
+    stop (float): End of the range
+    step (float): Step size
+
+    Returns:
+    list: Discrete actions
+    """
+    actions = []
+    current = start
+    while current <= stop + 1e-9:
+        actions.append(round(current, 10))
+        current += step
+    return actions
+
+# Initialize a grid of x and y states within a range
+def initialize_grid(min_val, max_val, step):
+    """
+    Generates a discretized grid for a given range and step size.
+
+    Parameters:
+    min_val (float): Minimum value
+    max_val (float): Maximum value
+    step (float): Step size
+
+    Returns:
+    list: Discretized grid values
+    """
+    grid = []
+    current = min_val
+    while current <= max_val + 1e-9:
+        grid.append(round(current, 10))
+        current += step
+    return grid
+
+# Max-min optimization with dynamic programming
+def compute_optimal_policy(time_steps, delta_t, action_step, grid_step):
+    """
+    Computes the optimal policy using dynamic programming.
+
+    Parameters:
+    time_steps (int): Number of time steps
+    delta_t (float): Time increment per step
+    action_step (float): Discretization step for actions (steering angles)
+    grid_step (float): Discretization step for x and y
+
+    Returns:
+    tuple: (Value function V, Policy dictionary, x_grid, y_grid, actions)
+    """
+    # Define grid and actions
+    x_grid = initialize_grid(-2, 2, grid_step)
+    y_grid = initialize_grid(-2, 2, grid_step)
+    actions = discretize_actions(-2.0, 2.0, action_step)
+
+    # Initialize value function for each time step
+    V = [{} for _ in range(time_steps + 1)]
+
+    # Set terminal cost to zero for all states
+    for x in x_grid:
+        for y in y_grid:
+            V[time_steps][(x, y)] = 0.0
+
+    # Backward iteration for optimal policy
+    for k in range(time_steps - 1, -1, -1):
+        print(f"Computing value function for time step {k}")
+        for x in x_grid:
+            for y in y_grid:
+                state = (x, y)
+                max_min_value = float('-inf')
+
+                for u in actions:
+                    next_state = f([x, y, 0], u, delta_t)
+                    x_next = round(min(max(next_state[0], -2), 2), 10)
+                    y_next = round(min(max(next_state[1], -2), 2), 10)
+                    next_state_rounded = (x_next, y_next)
+
+                    # Retrieve future value; if not present, assign infinity
+                    future_value = V[k + 1].get(next_state_rounded, float('inf'))
+
+                    # Compute the signed distance for the current state after applying action
+                    # Here, we consider the immediate cost as -g(state) to minimize
+                    # For max-min, we take the minimum over future costs
+                    # Adjust this logic based on your exact optimization objective
+                    inf_min_cost = float('inf')
+                    for future_time in range(1, time_steps - k + 1):
+                        # Compute the state at future_time steps ahead
+                        future_state = f([x, y, 0], u, future_time * delta_t)
+                        future_cost = -g(future_state)
+                        inf_min_cost = min(inf_min_cost, future_cost)
+
+                    # Update current value with min of inf_min_cost and future_value
+                    current_value = min(inf_min_cost, future_value)
+                    max_min_value = max(max_min_value, current_value)
+
+                V[k][state] = max_min_value
+
+    # Compute the optimal policy
+    policy = {}
+    for x in x_grid:
+        for y in y_grid:
+            state = (x, y)
+            best_action = None
+            best_value = float('-inf')
+
+            for u in actions:
+                next_state = f([x, y, 0], u, delta_t)
+                x_next = round(min(max(next_state[0], -2), 2), 10)
+                y_next = round(min(max(next_state[1], -2), 2), 10)
+                next_state_rounded = (x_next, y_next)
+
+                future_value = V[1].get(next_state_rounded, float('inf'))
+
+                inf_min_cost = float('inf')
+                for future_time in range(1, time_steps):
+                    future_state = f([x, y, 0], u, future_time * delta_t)
+                    future_cost = -g(future_state)
+                    inf_min_cost = min(inf_min_cost, future_cost)
+
+                current_value = min(inf_min_cost, future_value)
+
+                if current_value > best_value:
+                    best_value = current_value
+                    best_action = u
+
+            policy[state] = best_action
+
+    return V, policy, x_grid, y_grid, actions
+
+# Map state to nearest x, y grid point
+def map_to_nearest_grid(state, x_grid, y_grid):
+    """
+    Maps a given state to the nearest grid point.
+
+    Parameters:
+    state (list or tuple): Current state [x, y, theta]
+    x_grid (list): Discretized x grid
+    y_grid (list): Discretized y grid
+
+    Returns:
+    tuple: Nearest grid state (x, y)
+    """
+    x, y = state[:2]
+    x_closest = min(x_grid, key=lambda grid_x: abs(grid_x - x))
+    y_closest = min(y_grid, key=lambda grid_y: abs(grid_y - y))
+    return (x_closest, y_closest)
+
+# Simulate trajectory following the computed policy
+def simulate_trajectory(initial_state, policy, V, time_steps, delta_t, action_step, grid_step):
+    """
+    Simulates the trajectory of Dubin's car following the optimal policy.
+
+    Parameters:
+    initial_state (list or tuple): Initial state [x, y, theta]
+    policy (dict): Optimal policy mapping states to actions
+    V (list): Value function over time steps
+    time_steps (int): Number of time steps
+    delta_t (float): Time increment per step
+    action_step (float): Steering angle step
+    grid_step (float): Grid step for x and y
+
+    Returns:
+    tuple: (Trajectory list, Value over time list, Signed distances list)
+    """
+    x_grid = initialize_grid(-2, 2, grid_step)
+    y_grid = initialize_grid(-2, 2, grid_step)
+    current_state = initial_state
+    trajectory = [tuple(current_state)]
+    signed_distances = []
+    value_over_time = []
+
+    for k in range(time_steps):
+        nearest_state = map_to_nearest_grid(current_state, x_grid, y_grid)
+        optimal_action = policy.get(nearest_state, 0.0)
+        next_state = f(current_state, optimal_action, delta_t)
+
+        trajectory.append(tuple(next_state))
+        s_distance = g(nearest_state)
+        signed_distances.append(s_distance)
+
+        value = V[k].get(nearest_state, float('-inf'))
+        value_over_time.append(value)
+
+        current_state = next_state
+
+    return trajectory, value_over_time, signed_distances
+
+# Parameters for dynamic programming function
+time_steps = 20
+delta_t = 0.1
+action_step = 0.1
+grid_step = 0.1
+
+# Initial condition
+initial_state = [0, 0, 0.0]
+
+# Compute optimal policy
+V, policy, x_grid, y_grid, actions = compute_optimal_policy(time_steps, delta_t, action_step, grid_step)
+
+# Simulate the trajectory by following the computed policy
+trajectory, value_over_time, signed_distances = simulate_trajectory(initial_state, policy, V, time_steps, delta_t, action_step, grid_step)
+
+# Plot results in a single figure
+plt.figure(figsize=(18, 6))
+
+# 1. Trajectory plot with boundary, start, and end points
+plt.subplot(1, 3, 1)
+trajectory_x = [state[0] for state in trajectory]
+trajectory_y = [state[1] for state in trajectory]
+plt.plot(trajectory_x, trajectory_y, label="Trajectory")
+plt.plot([-1, 1, 1, -1, -1], [-1, -1, 1, 1, -1], 'r--', label="Boundary")  # Plot boundary
+plt.scatter([trajectory_x[0]], [trajectory_y[0]], color="green", label="Start", zorder=5)  # Start point
+plt.scatter([trajectory_x[-1]], [trajectory_y[-1]], color="red", label="End", zorder=5)  # End point
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+
+# 2. Value function plot over time
+plt.subplot(1, 3, 2)
+plt.plot(range(len(value_over_time)), value_over_time, marker='s', color='orange')
+plt.xlabel("Time Step")
+plt.ylabel("Value Function")
+plt.grid(True)
+plt.tight_layout()
+
+# 3. Signed distance plot over time
+plt.subplot(1, 3, 3)
+plt.plot(range(len(signed_distances)), signed_distances, marker='^', color='purple')
+plt.xlabel("Time Step")
+plt.ylabel("Signed Distance")
+plt.grid(True)
+plt.tight_layout()
+
+plt.show()
+
+# Now, create a separate figure for the 3D plot of the value function at time step k=0
+# You can choose different k values to visualize the value function at different time steps
+
+k = 0  # Choose the initial time step
+
+# Create meshgrid for x and y
+X, Y = np.meshgrid(x_grid, y_grid)
+Z = np.zeros_like(X)
+
+for i in range(len(x_grid)):
+    for j in range(len(y_grid)):
+        state = (x_grid[i], y_grid[j])
+        Z[j, i] = V[k].get(state, float('-inf'))  # Note: rows correspond to y, columns to x
+
+# Create a new figure for the 3D plot
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot the surface
+surf = ax.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none')
+
+# Add labels
+ax.set_xlabel('X Position')
+ax.set_ylabel('Y Position')
+ax.set_zlabel('Value Function')
+
+# Add a color bar to indicate the scale
+fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+
+# Set title (optional, you mentioned no titles for plots, but for clarity, it's okay)
+ax.set_title(f"Value Function at Time Step {k}")
+
+plt.show()
